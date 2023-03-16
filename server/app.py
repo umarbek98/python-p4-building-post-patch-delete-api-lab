@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from flask import Flask, make_response, jsonify
+from flask import Flask, make_response, jsonify, request
 from flask_migrate import Migrate
 
 from models import db, Bakery, BakedGood
@@ -30,17 +30,27 @@ def bakeries():
     )
     return response
 
-@app.route('/bakeries/<int:id>')
+@app.route('/bakeries/<int:id>', methods=['GET', 'PATCH'])
 def bakery_by_id(id):
-
     bakery = Bakery.query.filter_by(id=id).first()
-    bakery_serialized = bakery.to_dict()
+    if request.method == 'GET':
+        bakery_serialized = bakery.to_dict()
 
-    response = make_response(
-        bakery_serialized,
-        200
-    )
-    return response
+        response = make_response(
+            bakery_serialized,
+            200
+        )
+        return response
+    
+    elif request.method == 'PATCH':
+        data = request.get_json()
+        for field in data:
+            setattr(bakery, field, data[field])
+        db.session.add(bakery)
+        db.session.commit()
+    
+    return make_response(jsonify(bakery.to_dict()), 200)
+        
 
 @app.route('/baked_goods/by_price')
 def baked_goods_by_price():
@@ -66,5 +76,34 @@ def most_expensive_baked_good():
     )
     return response
 
+@app.route('/baked_goods', methods =['GET', 'POST'])
+def all_baked_goods():
+    if request.method == 'GET':
+        all_goods = BakedGood.query.all()
+        goods_dict = [goods.to_dict() for goods in all_goods]
+        return make_response(jsonify(goods_dict), 200)
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        new_goods = BakedGood()
+
+        for field in data:
+            setattr(new_goods, field, data[field])
+        db.session.add(new_goods)
+        db.session.commit()
+        return make_response(jsonify(new_goods.to_dict()), 201)
+        
+@app.route('/baked_goods/<int:id>', methods = ['GET', 'DELETE'])
+def goods_by_id(id):
+    goods = BakedGood.query.filter(BakedGood.id == id).first()
+
+    if request.method == 'GET':
+        return make_response(jsonify(goods.to_dict()), 200)
+    
+    elif request.method == 'DELETE':
+        db.session.delete(goods)
+        db.session.commit()
+        return make_response(jsonify({'status': 'delete sucess'}), 200)
+    
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
